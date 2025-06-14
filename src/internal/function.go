@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -57,6 +58,9 @@ func returnFocusType(focusPanel focusPanelType) filePanelFocusType {
 	return secondFocus
 }
 
+// Todo : Take common.Config.CaseSensitiveSort as a function parameter
+// and also consider testing this caseSensitive with both true and false in
+// our unit_test TestReturnDirElement
 func returnDirElement(location string, displayDotFile bool, sortOptions sortOptionsModelData) []element {
 	dirEntries, err := os.ReadDir(location)
 	if err != nil {
@@ -128,6 +132,33 @@ func returnDirElement(location string, displayDotFile bool, sortOptions sortOpti
 			fileInfoI, _ := dirEntries[i].Info()
 			fileInfoJ, _ := dirEntries[j].Info()
 			return fileInfoI.ModTime().After(fileInfoJ.ModTime()) != reversed
+		}
+	case "Type":
+		order = func(i, j int) bool {
+			// One of them is a directory, and the other is not
+			if dirEntries[i].IsDir() != dirEntries[j].IsDir() {
+				return dirEntries[i].IsDir()
+			}
+
+			var extI, extJ string
+			if !dirEntries[i].IsDir() {
+				extI = strings.ToLower(filepath.Ext(dirEntries[i].Name()))
+			}
+			if !dirEntries[j].IsDir() {
+				extJ = strings.ToLower(filepath.Ext(dirEntries[j].Name()))
+			}
+
+			// Compare by extension/type
+			if extI != extJ {
+				return (extI < extJ) != reversed
+			}
+
+			// If same type, fall back to name
+			if common.Config.CaseSensitiveSort {
+				return (dirEntries[i].Name() < dirEntries[j].Name()) != reversed
+			}
+
+			return (strings.ToLower(dirEntries[i].Name()) < strings.ToLower(dirEntries[j].Name())) != reversed
 		}
 	}
 
@@ -210,6 +241,17 @@ func removeElementByValue(slice []string, value string) []string {
 		}
 	}
 	return newSlice
+}
+
+func checkFileNameValidity(name string) error {
+	switch {
+	case name == ".", name == "..":
+		return errors.New("file name cannot be '.' or '..'")
+	case strings.HasSuffix(name, fmt.Sprintf("%c.", filepath.Separator)), strings.HasSuffix(name, fmt.Sprintf("%c..", filepath.Separator)):
+		return fmt.Errorf("file name cannot end with '%c.' or '%c..'", filepath.Separator, filepath.Separator)
+	default:
+		return nil
+	}
 }
 
 func renameIfDuplicate(destination string) (string, error) {

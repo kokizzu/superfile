@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -81,7 +82,7 @@ func PrettierDirectoryPreviewName(name string, isDir bool, bgColor lipgloss.Colo
 }
 
 func ClipboardPrettierName(name string, width int, isDir bool, isSelected bool) string {
-	style := GetElementIcon(name, isDir, Config.Nerdfont)
+	style := GetElementIcon(filepath.Base(name), isDir, Config.Nerdfont)
 	if isSelected {
 		return StringColorRender(lipgloss.Color(style.Color), FooterBGColor).
 			Background(FooterBGColor).
@@ -200,8 +201,36 @@ func MakePrintableWithEscCheck(line string, allowEsc bool) string {
 		if r == utf8.RuneError {
 			continue
 		}
-		if r > 0x7f || unicode.IsGraphic(r) ||
-			r == rune('\t') || r == rune('\n') || (allowEsc && r == rune('\x1b')) {
+		// It needs to be handled separately since considered a space,
+		// It is multi-byte in UTF-8, But it has zero display width
+		if r == 0xa0 {
+			sb.WriteRune(r)
+			continue
+		}
+		// It needs to be handled separately since considered a space,
+		// Since we are using ansi.StringWidth() for truncation, and \t is
+		// considered zero width
+		if r == '\t' {
+			sb.WriteString("    ")
+			continue
+		}
+		if r == 0x1b {
+			if allowEsc {
+				sb.WriteRune(r)
+			}
+			continue
+		}
+		if r > 0x7f {
+			if unicode.IsSpace(r) && utf8.RuneLen(r) > 1 {
+				// See https://github.com/charmbracelet/x/issues/466
+				// Space chacters spanning more than one bytes are not handled well by
+				// ansi.Wrap(), and so lipgloss.Render() has issues
+				r = ' '
+			}
+			sb.WriteRune(r)
+			continue
+		}
+		if unicode.IsGraphic(r) || r == rune('\n') {
 			sb.WriteRune(r)
 		}
 	}

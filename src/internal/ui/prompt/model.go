@@ -20,7 +20,7 @@ func DefaultModel(maxHeight int, width int) Model {
 
 func GenerateModel(spfPromptHotkey string, shellPromptHotkey string, closeOnSuccess bool, maxHeight int, width int) Model {
 	m := Model{
-		headline:          icon.Terminal + " " + promptHeadlineText,
+		headline:          icon.Terminal + icon.Space + promptHeadlineText,
 		open:              false,
 		shellMode:         true,
 		textInput:         common.GeneratePromptTextInput(),
